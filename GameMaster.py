@@ -125,8 +125,3 @@ class GameMaster:
             pygame.draw.circle(self.screen, color, [x, y], self.piece_radius)
         else:
             pygame.draw.circle(self.screen, color, [x, y], self.piece_radius, self.king_radius)
-
-
-if __name__ == "__main__":
-    g = GameMaster()
-    g.new_game()

@@ -33,7 +33,7 @@ class Game:
         self.take_possibility = False
         possible_moves.update_if_needed(self.size)
 
-    def perform_move(self, move, testing_takes=False, debug=True):
+    def perform_move(self, move, debug=True):
         if self.winner_side != 0:
             if debug:
                 print("Move invalid: Game ended!")
@@ -41,7 +41,7 @@ class Game:
         source = move[MoveParams.FROM]
         if self.game_state[GameParams.ACTIVE_PIECE] not in (-1, source):
             if debug:
-                print("Move invalid! Another piece was moved!")
+                print("Move invalid! Another piece has to move!")
             return False
         piece = self.game_state[source]
         if info.side(piece) != self.game_state[GameParams.ACTIVE_SIDE]:
@@ -83,24 +83,24 @@ class Game:
                     print("Move invalid: Invalid direction for man!")
                 return False
         if enemy_tile is not None:
-            self.take_piece(enemy_tile, testing_takes)
+            self.take_piece(enemy_tile)
         else:
-            if not testing_takes and self.take_possible():
+            if self.take_possible():
                 if debug:
                     print("Move invalid: Taking is compulsory!")
                 return False
             self.taken_history.put(None)
             self.game_state[GameParams.LAST_TAKE] += 1
-        if not testing_takes:
-            self.game_state[GameParams.ACTIVE_PIECE] = target
+        previous_active = self.game_state[GameParams.ACTIVE_PIECE]
+        self.game_state[GameParams.ACTIVE_PIECE] = target
         self.game_state[target] = piece
         self.game_state[source] = Pieces.EMPTY
         promoted = self.promotion(target)
         turn_ended = False
-        if not testing_takes and (not self.take_possible_for_tile(target) or enemy_tile is None):
+        if not self.take_possible_for_tile(target) or enemy_tile is None:
             self.end_turn()
             turn_ended = True
-        self.move_history.put((move, promoted, turn_ended))
+        self.move_history.put((move, promoted, turn_ended, previous_active))
         return True
 
     def test_if_takes(self, move):
@@ -162,8 +162,7 @@ class Game:
             self.depromote(source)
         if move_data[2]:  # undo turn end
             self.end_turn()
-            self.game_state[GameParams.ACTIVE_PIECE] = move[MoveParams.FROM]
-        # TODO a lot
+        self.game_state[GameParams.ACTIVE_PIECE] = move_data[3]
 
     def promotion(self, tile):
         if self.game_state[tile] == Pieces.W_MAN and on_edge(self.size, tile, Edge.TOP_EDGE):
@@ -186,17 +185,11 @@ class Game:
         self.game_state[GameParams.ACTIVE_PIECE] = -1
 
     def take_possible_for_tile(self, tile):
-        if side(self.game_state[tile] != self.game_state[GameParams.ACTIVE_SIDE]):
+        if side(self.game_state[tile]) != self.game_state[GameParams.ACTIVE_SIDE]:
             return False
         for move in possible_moves.moves(tile):
-            if not self.perform_move(move, testing_takes=True, debug=False):
-                continue
-            taken = self.taken_history.get()
-            self.taken_history.put(taken)
-            if taken is not None:
-                self.undo_move()
+            if self.test_if_takes(move):
                 return True
-            self.undo_move()
         return False
 
     def take_possible(self):
