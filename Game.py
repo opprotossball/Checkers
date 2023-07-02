@@ -14,6 +14,8 @@ possible_moves = PossibleMoves()
 class Game:
 
     def __init__(self, size=8):
+        self.done = False
+        self.max_moves_without_taking = 39
         self.size = size
         self.half = int(size / 2)
         self.starting_rows = 3
@@ -33,8 +35,8 @@ class Game:
         self.take_possibility = False
         possible_moves.update_if_needed(self.size)
 
-    def perform_move(self, move, debug=True):
-        if self.winner_side != 0:
+    def perform_move(self, move, debug=False, testing_moves=False):
+        if self.done:
             if debug:
                 print("Move invalid: Game ended!")
             return False
@@ -53,6 +55,7 @@ class Game:
         my_side = side(piece)
         target = source
         enemy_tile = None
+        previous_taken = self.game_state[GameParams.LAST_TAKE]
         for _ in range(length):
             target = get_neigh(self.size, target, direction)
             if target is None or side(self.game_state[target]) == my_side:
@@ -83,7 +86,7 @@ class Game:
                     print("Move invalid: Invalid direction for man!")
                 return False
         if enemy_tile is not None:
-            self.take_piece(enemy_tile)
+            self.take_piece(enemy_tile, testing_moves)
         else:
             if self.take_possible():
                 if debug:
@@ -100,7 +103,9 @@ class Game:
         if not self.take_possible_for_tile(target) or enemy_tile is None:
             self.end_turn()
             turn_ended = True
-        self.move_history.put((move, promoted, turn_ended, previous_active))
+        self.move_history.put((move, promoted, turn_ended, previous_active, previous_taken))
+        if self.game_state[GameParams.LAST_TAKE] >= self.max_moves_without_taking:
+            self.done = True
         return True
 
     def test_if_takes(self, move):
@@ -140,7 +145,8 @@ class Game:
             pieces_left -= 1
             if pieces_left < 1:
                 self.winner_side = -piece_side
-                print(f"{Side(self.winner_side).name} WON!")
+                self.done = True
+                # print(f"{Side(self.winner_side).name} WON!")
             self.pieces_left[piece_side] = pieces_left
         return True
 
@@ -158,11 +164,14 @@ class Game:
         taken = self.taken_history.get()
         if taken is not None:
             self.game_state[taken[0]] = taken[1]
+            self.pieces_left[side(taken[1])] += 1
         if move_data[1]:  # undo promotion
             self.depromote(source)
         if move_data[2]:  # undo turn end
             self.end_turn()
         self.game_state[GameParams.ACTIVE_PIECE] = move_data[3]
+        self.game_state[GameParams.LAST_TAKE] = move_data[4]
+        self.done = False
 
     def promotion(self, tile):
         if self.game_state[tile] == Pieces.W_MAN and on_edge(self.size, tile, Edge.TOP_EDGE):
@@ -197,3 +206,12 @@ class Game:
             if self.take_possible_for_tile(tile):
                 return True
         return False
+
+    def legal_moves_mask(self):
+        mask = np.zeros((possible_moves.n_moves, ), dtype=bool)
+        for i, move in enumerate(possible_moves):
+            valid = self.perform_move(move, testing_moves=True)
+            mask[i] = valid
+            if valid:
+                self.undo_move()
+        return mask

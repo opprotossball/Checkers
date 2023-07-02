@@ -1,5 +1,6 @@
 import math
 
+import numpy as np
 import pygame
 
 import board
@@ -62,6 +63,7 @@ class GameMaster:
         pygame.quit()
 
     def on_click(self):
+        print(np.count_nonzero(self.game.legal_moves_mask()))
         pos = pygame.mouse.get_pos()
         for i, button in enumerate(self.buttons):
             if button.collidepoint(pos):
@@ -90,7 +92,7 @@ class GameMaster:
             print("Whatcha doin'?")
             self.reset_clicked()
             return
-        self.game.perform_move((source, params[0], params[1]))
+        self.game.perform_move((source, params[0], params[1]), debug=True)
 
     def reset_clicked(self):
         self.last_clicked = None
@@ -119,7 +121,7 @@ class GameMaster:
 
     def draw_piece(self, piece, x, y):
         if piece == Pieces.EMPTY:
-            return
+            return 
         color = self.white_piece_color if side(piece) == Side.WHITE else self.black_piece_color
         if is_man(piece):
             pygame.draw.circle(self.screen, color, [x, y], self.piece_radius)

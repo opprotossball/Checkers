@@ -8,6 +8,7 @@ class PossibleMoves:
     def __init__(self):
         self.size = -1
         self.possible_moves = []
+        self.n_moves = -1
 
     def update_if_needed(self, size):
         if self.size == size:
@@ -26,6 +27,19 @@ class PossibleMoves:
                         break
                     else:
                         self.possible_moves[tile].append((tile, direction, length))
+        self.n_moves = sum(len(t) for t in self.possible_moves)
 
     def moves(self, tile):
         return self.possible_moves[tile]
+
+    def move(self, move_id):
+        i = 0
+        while move_id >= len(self.possible_moves[i]):
+            move_id -= len(self.possible_moves[i])
+            i += 1
+        return self.possible_moves[i][move_id]
+
+    def __iter__(self):
+        for t in self.possible_moves:
+            for m in t:
+                yield m
