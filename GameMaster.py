@@ -1,4 +1,5 @@
 import math
+import random
 
 import numpy as np
 import pygame
@@ -63,7 +64,7 @@ class GameMaster:
         pygame.quit()
 
     def on_click(self):
-        print(np.count_nonzero(self.game.legal_moves_mask()))
+        print(np.count_nonzero(self.game.legal_mask))
         pos = pygame.mouse.get_pos()
         for i, button in enumerate(self.buttons):
             if button.collidepoint(pos):
@@ -92,7 +93,7 @@ class GameMaster:
             print("Whatcha doin'?")
             self.reset_clicked()
             return
-        self.game.perform_move((source, params[0], params[1]), debug=True)
+        self.game.perform_move((source, params[0], params[1]))
 
     def reset_clicked(self):
         self.last_clicked = None

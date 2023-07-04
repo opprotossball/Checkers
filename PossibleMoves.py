@@ -8,6 +8,7 @@ class PossibleMoves:
     def __init__(self):
         self.size = -1
         self.possible_moves = []
+        self.targets = []
         self.n_moves = -1
         self.moves_dict = {}
 
@@ -18,7 +19,6 @@ class PossibleMoves:
         n_tiles = int(math.pow(size, 2) / 2)
         i = 0
         for tile in range(n_tiles):
-            self.possible_moves.append([])
             for direction in info.Direction:
                 neigh = tile
                 length = 0
@@ -28,27 +28,24 @@ class PossibleMoves:
                     if neigh is None:
                         break
                     else:
-                        self.possible_moves[tile].append((tile, direction, length))
+                        self.possible_moves.append((tile, direction, length))
+                        self.targets.append(neigh)
                         self.moves_dict[(tile, direction, length)] = i
                         i += 1
-        self.n_moves = sum(len(t) for t in self.possible_moves)
-        print(self.n_moves == i)
-        print("Possible moves")
+        self.n_moves = len(self.possible_moves)
 
     def moves(self, tile):
         return self.possible_moves[tile]
 
     def move(self, move_id):
-        i = 0
-        while move_id >= len(self.possible_moves[i]):
-            move_id -= len(self.possible_moves[i])
-            i += 1
-        return self.possible_moves[i][move_id]
+        return self.possible_moves[self.move_id(move_id)]
+
+    def target(self, move_id):
+        return self.targets[move_id]
 
     def move_id(self, move):
-        return self.moves_dict[move]
+        return self.moves_dict.get(move)
 
     def __iter__(self):
-        for t in self.possible_moves:
-            for m in t:
-                yield m
+        for m in self.possible_moves:
+            yield m
