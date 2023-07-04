@@ -9,12 +9,14 @@ class PossibleMoves:
         self.size = -1
         self.possible_moves = []
         self.n_moves = -1
+        self.moves_dict = {}
 
     def update_if_needed(self, size):
         if self.size == size:
             return
         self.size = size
         n_tiles = int(math.pow(size, 2) / 2)
+        i = 0
         for tile in range(n_tiles):
             self.possible_moves.append([])
             for direction in info.Direction:
@@ -27,7 +29,11 @@ class PossibleMoves:
                         break
                     else:
                         self.possible_moves[tile].append((tile, direction, length))
+                        self.moves_dict[(tile, direction, length)] = i
+                        i += 1
         self.n_moves = sum(len(t) for t in self.possible_moves)
+        print(self.n_moves == i)
+        print("Possible moves")
 
     def moves(self, tile):
         return self.possible_moves[tile]
@@ -38,6 +44,9 @@ class PossibleMoves:
             move_id -= len(self.possible_moves[i])
             i += 1
         return self.possible_moves[i][move_id]
+
+    def move_id(self, move):
+        return self.moves_dict[move]
 
     def __iter__(self):
         for t in self.possible_moves:

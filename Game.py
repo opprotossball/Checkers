@@ -35,6 +35,11 @@ class Game:
         self.take_possibility = False
         possible_moves.update_if_needed(self.size)
 
+        self.legal_mask = None
+        self.legal_with_takes = []
+        self.legal_no_takes = []
+        self.legal_updated = False
+
     def perform_move(self, move, debug=False, testing_moves=False):
         if self.done:
             if debug:
@@ -108,6 +113,37 @@ class Game:
             self.done = True
         return True
 
+    def check_move(self, move):
+        source = move[MoveParams.FROM]
+        if self.game_state[GameParams.ACTIVE_PIECE] not in (-1, source):  # Move invalid! Another piece has to move
+            return False
+        piece = self.game_state[source]
+        if info.side(piece) != self.game_state[GameParams.ACTIVE_SIDE]:  # Move invalid: Side inactive
+            return False
+        direction = move[MoveParams.DIRECTION]
+        length = move[MoveParams.LENGTH]
+        my_side = side(piece)
+        if is_man(piece):
+            if length > 2:  # Move invalid: Move too long for man
+                return False
+            elif length == 1 and (my_side == Side.WHITE) ^ is_up(direction):  # Move invalid: Invalid direction for man
+                return False
+        target = source
+        enemy_tile = None
+        for _ in range(length):
+            target = get_neigh(self.size, target, direction)
+            if target is None or side(self.game_state[target]) == my_side:  # Move invalid: Invalid target or occupied friendly piece in path
+                return False
+            if self.game_state[target] != Pieces.EMPTY:
+                if enemy_tile is not None:  # Move invalid: More than 1 enemy in path
+                    return False
+                enemy_tile = target
+        if self.game_state[target] != Pieces.EMPTY:  # Move invalid: Target not empty
+            return False
+        if is_man(piece) and length == 2 and enemy_tile is None:  # Move invalid: Man cannot jump over empty
+            return False
+        return True, enemy_tile is not None
+
     def test_if_takes(self, move):
         source = move[MoveParams.FROM]
         piece = self.game_state[source]
@@ -132,6 +168,10 @@ class Game:
         if enemy_tile is not None:
             return True
         return False
+
+    def update_legal(self):
+        pass
+
 
     def take_piece(self, tile, testing_takes=False):
         piece_side = side(self.game_state[tile])
@@ -215,3 +255,12 @@ class Game:
             if valid:
                 self.undo_move()
         return mask
+
+    def active_piece(self):
+        return self.game_state[GameParams.ACTIVE_PIECE]
+
+    def active_side(self):
+        return self.game_state[GameParams.ACTIVE_SIDE]
+
+    def last_take(self):
+        return self.game_state[GameParams.LAST_TAKE]
