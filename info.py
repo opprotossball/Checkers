@@ -53,7 +53,7 @@ def is_left(direction):
 
 
 def is_man(piece):
-    return piece == Pieces.B_MAN or piece == Pieces.W_MAN
+    return piece == -1 or piece == 1
 
 
 def side(piece):

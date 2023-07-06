@@ -1,6 +1,11 @@
 import math
 
+import numpy as np
+
 from info import Edge, Direction
+
+size = 8
+n_tiles = 32
 
 edges_to_check = [
     [Edge.TOP_EDGE, Edge.LEFT_EDGE],
@@ -10,7 +15,7 @@ edges_to_check = [
 ]
 
 
-def on_edge(size, tile, edge):
+def __on_edge(size, tile, edge):
     half = int(size / 2)
     match edge:
         case Edge.LEFT_EDGE:
@@ -24,8 +29,18 @@ def on_edge(size, tile, edge):
         case _:
             raise Exception("Wrong edge given!")
     
-    
-def get_neigh(size, tile, direction):
+
+on_edges = np.zeros(shape=(n_tiles, 4), dtype=bool)
+for tile in range(n_tiles):
+    for edge in range(4):
+        on_edges[tile, edge] = __on_edge(size, tile, edge)
+
+
+def on_edge(size, tile, edge):
+    return on_edges[tile, edge]
+
+
+def __get_neigh(size, tile, direction):
     half = int(size / 2)
     for edge in edges_to_check[direction]:
         if on_edge(size, tile, edge):
@@ -42,3 +57,18 @@ def get_neigh(size, tile, direction):
             return tile + half + 1 - odd_row
         case _:
             raise Exception("Wrong direction given!")
+
+
+neighs = np.zeros(shape=(n_tiles, 4), dtype=int)
+for tile in range(n_tiles):
+    for direction in range(4):
+        neigh = __get_neigh(size, tile, direction)
+        if neigh is None:
+            neighs[tile, direction] = -1
+        else:
+            neighs[tile, direction] = neigh
+
+
+def get_neigh(size, tile, direction):
+    neigh = neighs[tile, direction]
+    return None if neigh == -1 else neigh

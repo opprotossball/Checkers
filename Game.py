@@ -4,30 +4,32 @@ from queue import Queue, LifoQueue
 import numpy as np
 
 import info
+from Moves import Moves
 from PossibleMoves import PossibleMoves
 from board import get_neigh, on_edge
 from info import GameParams, Pieces, Side, MoveParams, side, is_man, is_up, Edge
 
-possible_moves = PossibleMoves()
+possible_moves = Moves()
 
 
 class Game:
 
     def __init__(self, size=8):
+        if size != 8:
+            raise Exception("Only board of size 8 supported now!")
         self.done = False
         self.max_moves_without_taking = 39
         self.size = size
         self.half = int(size / 2)
+        self.n_tiles = 32
         self.starting_rows = 3
-        if size % 2 == 1:
-            raise Exception("Odd board sizes not supported!")
         self.game_state = np.zeros((int(math.pow(size, 2) / 2) + len(GameParams),))
         n_pieces = self.half * self.starting_rows
-        self.game_state[:n_pieces] = Pieces.B_MAN
-        self.game_state[-n_pieces - len(GameParams):] = Pieces.W_MAN
-        self.game_state[GameParams.ACTIVE_PIECE] = -1
-        self.game_state[GameParams.LAST_TAKE] = 0
-        self.game_state[GameParams.ACTIVE_SIDE] = Side.WHITE
+        self.game_state[:n_pieces] = -1
+        self.game_state[-n_pieces - len(GameParams):] = 1
+        self.game_state[-3] = -1
+        self.game_state[-1] = 0
+        self.game_state[-2] = Side.WHITE
         self.winner_side = 0
         self.pieces_left = {Side.WHITE: n_pieces, Side.BLACK: n_pieces}
         self.taken_history = LifoQueue()
@@ -44,13 +46,13 @@ class Game:
     def perform_move(self, move):
         if self.done or self.check_game_end():
             return False
-        previous_taken = self.game_state[GameParams.LAST_TAKE]
-        previous_active = self.game_state[GameParams.ACTIVE_PIECE]
+        previous_taken = self.game_state[-1]
+        previous_active = self.game_state[-3]
         move_id = possible_moves.move_id(move)
         if move_id is None or not self.legal_mask[move_id]:
             return False
-        piece = self.game_state[move[MoveParams.FROM]]
-        self.game_state[move[MoveParams.FROM]] = Pieces.EMPTY
+        piece = self.game_state[move[0]]
+        self.game_state[move[0]] = 0
         target = possible_moves.target(move_id)
         self.game_state[target] = piece
         enemy_tile = self.takes[move_id]
@@ -58,41 +60,41 @@ class Game:
             self.taken_history.put(None)
         else:
             self.take_piece(self.takes[move_id])
-        self.game_state[GameParams.ACTIVE_PIECE] = target
+        self.game_state[-3] = target
         self.__update_legal()
         if len(self.legal_moves) == 0 or enemy_tile == -1:
             self.end_turn()
             turn_ended = True
         else:
             turn_ended = False
-            self.game_state[GameParams.ACTIVE_PIECE] = target
+            self.game_state[-3] = target
         promoted = self.promotion(target)
         self.move_history.put((move, promoted, turn_ended, previous_active, previous_taken))
 
     def check_game_end(self):
         if len(self.legal_moves) == 0:
             self.done = True
-            self.winner_side = -self.game_state[GameParams.ACTIVE_SIDE]
+            self.winner_side = -self.game_state[-2]
             return True
-        if self.game_state[GameParams.LAST_TAKE] > self.max_moves_without_taking:
+        if self.game_state[-1] > self.max_moves_without_taking:
             self.done = True
             return True
         return False
 
     def check_move(self, move):
-        source = move[MoveParams.FROM]
-        if self.game_state[GameParams.ACTIVE_PIECE] not in (-1, source):  # Move invalid! Another piece has to move
+        source = move[0]
+        if self.game_state[-3] != -1 and self.game_state[-3] != source:  # Move invalid! Another piece has to move
             return False
         piece = self.game_state[source]
-        if info.side(piece) != self.game_state[GameParams.ACTIVE_SIDE]:  # Move invalid: Side inactive
+        if info.side(piece) != self.game_state[-2]:  # Move invalid: Side inactive
             return False
-        direction = move[MoveParams.DIRECTION]
-        length = move[MoveParams.LENGTH]
+        direction = move[1]
+        length = move[2]
         my_side = side(piece)
         if is_man(piece):
             if length > 2:  # Move invalid: Move too long for man
                 return False
-            elif length == 1 and (my_side == Side.WHITE) ^ is_up(direction):  # Move invalid: Invalid direction for man
+            elif length == 1 and (my_side == 1) ^ is_up(direction):  # Move invalid: Invalid direction for man
                 return False
         target = source
         enemy_tile = None
@@ -100,15 +102,15 @@ class Game:
             target = get_neigh(self.size, target, direction)
             if target is None or side(self.game_state[target]) == my_side:  # Move invalid: Invalid target or occupied friendly piece in path
                 return False
-            if self.game_state[target] != Pieces.EMPTY:
+            if self.game_state[target] != 0:
                 if enemy_tile is not None:  # Move invalid: More than 1 enemy in path
                     return False
                 enemy_tile = target
-        if self.game_state[target] != Pieces.EMPTY:  # Move invalid: Target not empty
+        if self.game_state[target] != 0:  # Move invalid: Target not empty
             return False
         if is_man(piece) and length == 2 and enemy_tile is None:  # Move invalid: Man cannot jump over empty
             return False
-        if self.game_state[GameParams.ACTIVE_PIECE] != -1 and enemy_tile is None:  # Move invalid: Cannot move after taking
+        if self.game_state[-3] != -1 and enemy_tile is None:  # Move invalid: Cannot move after taking
             return False
         return True, enemy_tile
 
@@ -147,8 +149,8 @@ class Game:
         if piece_side == 0:
             return False
         self.taken_history.put((tile, self.game_state[tile]))
-        self.game_state[tile] = Pieces.EMPTY
-        self.game_state[GameParams.LAST_TAKE] = 0
+        self.game_state[tile] = 0
+        self.game_state[-1] = 0
         pieces_left = self.pieces_left[piece_side]
         pieces_left -= 1
         if pieces_left < 1:
@@ -162,12 +164,12 @@ class Game:
             return
         move_data = self.move_history.get()
         move = move_data[0]
-        source = move[MoveParams.FROM]
+        source = move[0]
         target = source
-        for _ in range(move[MoveParams.LENGTH]):
-            target = get_neigh(self.size, target, move[MoveParams.DIRECTION])
+        for _ in range(move[2]):
+            target = get_neigh(self.size, target, move[1])
         self.game_state[source] = self.game_state[target]
-        self.game_state[target] = Pieces.EMPTY
+        self.game_state[target] = 0
         taken = self.taken_history.get()
         if taken is not None:
             self.game_state[taken[0]] = taken[1]
@@ -176,40 +178,40 @@ class Game:
             self.depromote(source)
         if move_data[2]:  # undo turn end
             self.end_turn()
-        self.game_state[GameParams.ACTIVE_PIECE] = move_data[3]
-        self.game_state[GameParams.LAST_TAKE] = move_data[4]
+        self.game_state[-3] = move_data[3]
+        self.game_state[-1] = move_data[4]
         self.done = False
         self.__update_legal()
 
     def promotion(self, tile):
-        if self.game_state[tile] == Pieces.W_MAN and on_edge(self.size, tile, Edge.TOP_EDGE):
-            self.game_state[tile] = Pieces.W_KING
+        if self.game_state[tile] == 1 and on_edge(self.size, tile, 3):
+            self.game_state[tile] = 2
             return True
-        elif self.game_state[tile] == Pieces.B_MAN and on_edge(self.size, tile, Edge.BOTTOM_EDGE):
-            self.game_state[tile] = Pieces.B_KING
+        elif self.game_state[tile] == -1 and on_edge(self.size, tile, 1):
+            self.game_state[tile] = -2
             return True
         else:
             return False
 
     def depromote(self, tile):
-        if self.game_state[tile] == Pieces.B_KING:
-            self.game_state[tile] = Pieces.B_MAN
-        elif self.game_state[tile] == Pieces.W_KING:
-            self.game_state[tile] = Pieces.W_MAN
+        if self.game_state[tile] == -2:
+            self.game_state[tile] = -1
+        elif self.game_state[tile] == 2:
+            self.game_state[tile] = 1
 
     def end_turn(self):
-        self.game_state[GameParams.ACTIVE_SIDE] *= -1
-        self.game_state[GameParams.ACTIVE_PIECE] = -1
+        self.game_state[-2] *= -1
+        self.game_state[-3] = -1
         self.__update_legal()
         if len(self.legal_moves) == 0:
-            self.winner_side = -self.game_state[GameParams.ACTIVE_SIDE]
+            self.winner_side = -self.game_state[-2]
             self.done = True
 
     def active_piece(self):
-        return self.game_state[GameParams.ACTIVE_PIECE]
+        return self.game_state[-3]
 
     def active_side(self):
-        return self.game_state[GameParams.ACTIVE_SIDE]
+        return self.game_state[-2]
 
     def last_take(self):
-        return self.game_state[GameParams.LAST_TAKE]
+        return self.game_state[-1]
