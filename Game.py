@@ -54,6 +54,7 @@ class Game:
         self.game_state[target] = piece
         enemy_tile = self.takes[move_id]
         if enemy_tile == -1:
+            self.game_state[-1] += 1
             self.taken_history.put(None)
         else:
             self.take_piece(self.takes[move_id])
@@ -70,11 +71,11 @@ class Game:
 
     def check_game_end(self):
         if len(self.legal_moves) == 0:
-            self.done = True
             self.winner_side = -self.game_state[-2]
+            self.end_game()
             return True
-        if self.game_state[-1] > self.max_moves_without_taking:
-            self.done = True
+        elif self.game_state[-1] > self.max_moves_without_taking:
+            self.end_game()
             return True
         return False
 
@@ -165,7 +166,7 @@ class Game:
         pieces_left -= 1
         if pieces_left < 1:
             self.winner_side = -piece_side
-            self.done = True
+            self.end_game()
         self.pieces_left[piece_side] = pieces_left
         return True
 
@@ -215,7 +216,12 @@ class Game:
         self.__update_legal()
         if len(self.legal_moves) == 0:
             self.winner_side = -self.game_state[-2]
-            self.done = True
+            self.end_game()
+
+    def end_game(self):
+        self.done = True
+        self.legal_moves = []
+        self.legal_mask = np.zeros((possible_moves.n_moves,), dtype=bool)
 
     def active_piece(self):
         return self.game_state[-3]
