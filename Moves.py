@@ -39,12 +39,10 @@ class Moves:
                     self.id_move[i] = move
                     self.targets.append(neigh)
                     i += 1
-        self.n_moves = len(self.all_moves)
+        self.n_moves = i
 
     def moves(self, tile, man=False):
-        move_list = self.man_moves[tile] if man else self.all_moves
-        for m in move_list:
-            yield m[0]
+        return self.man_moves[tile] if man else self.all_moves[tile]
 
     def move(self, move_id):
         return self.id_move.get(move_id)

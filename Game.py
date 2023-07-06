@@ -1,13 +1,10 @@
 import math
-from queue import Queue, LifoQueue
+from queue import LifoQueue
 
 import numpy as np
-
-import info
 from Moves import Moves
-from PossibleMoves import PossibleMoves
 from board import get_neigh, on_edge
-from info import GameParams, Pieces, Side, MoveParams, side, is_man, is_up, Edge
+from info import GameParams, Side, side, is_man, is_up
 
 possible_moves = Moves()
 
@@ -48,7 +45,7 @@ class Game:
             return False
         previous_taken = self.game_state[-1]
         previous_active = self.game_state[-3]
-        move_id = possible_moves.move_id(move)
+        move_id = possible_moves.move_id.get(move)
         if move_id is None or not self.legal_mask[move_id]:
             return False
         piece = self.game_state[move[0]]
@@ -61,13 +58,13 @@ class Game:
         else:
             self.take_piece(self.takes[move_id])
         self.game_state[-3] = target
-        self.__update_legal()
-        if len(self.legal_moves) == 0 or enemy_tile == -1:
+        if not self.take_possible_for_tile(target) or enemy_tile == -1:
             self.end_turn()
             turn_ended = True
         else:
             turn_ended = False
             self.game_state[-3] = target
+            self.__update_legal()
         promoted = self.promotion(target)
         self.move_history.put((move, promoted, turn_ended, previous_active, previous_taken))
 
@@ -83,11 +80,7 @@ class Game:
 
     def check_move(self, move):
         source = move[0]
-        if self.game_state[-3] != -1 and self.game_state[-3] != source:  # Move invalid! Another piece has to move
-            return False
         piece = self.game_state[source]
-        if info.side(piece) != self.game_state[-2]:  # Move invalid: Side inactive
-            return False
         direction = move[1]
         length = move[2]
         my_side = side(piece)
@@ -121,21 +114,28 @@ class Game:
         legal_no_take = []
         legal_take = []
         take_possible = False
-        for i, move in enumerate(possible_moves):
-            valid = self.check_move(move)
-            if not valid:
+        for tile in range(self.n_tiles):
+            piece = self.game_state[tile]
+            if side(piece) != self.game_state[-2]:
                 continue
-            take = valid[1]
-            if take_possible and take is None:
+            if self.game_state[-3] != -1 and self.game_state[-3] != tile:
                 continue
-            if take is not None:
-                take_possible = True
-                take_mask[i] = True
-                self.takes[i] = take
-                legal_take.append(move)
-            else:
-                legal_no_take.append(move)
-                no_take_mask[i] = True
+            for move in possible_moves.moves(tile, man=is_man(piece)):
+                valid = self.check_move(move)
+                if not valid:
+                    continue
+                take = valid[1]
+                if take_possible and take is None:
+                    continue
+                move_id = possible_moves.move_id.get(move)
+                if take is not None:
+                    take_possible = True
+                    take_mask[move_id] = True
+                    self.takes[move_id] = take
+                    legal_take.append(move)
+                else:
+                    legal_no_take.append(move)
+                    no_take_mask[move_id] = True
         if take_possible:
             self.legal_moves = legal_take
             self.legal_mask = take_mask
@@ -143,6 +143,16 @@ class Game:
             self.legal_moves = legal_no_take
             self.legal_mask = no_take_mask
         self.legal_updated = True
+
+    def take_possible_for_tile(self, tile):
+        for move in possible_moves.moves(tile, man=is_man(self.game_state[tile])):
+            valid = self.check_move(move)
+            if not valid:
+                continue
+            take = valid[1]
+            if take:
+                return True
+        return False
 
     def take_piece(self, tile):
         piece_side = side(self.game_state[tile])
